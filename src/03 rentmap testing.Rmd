@@ -1,0 +1,36 @@
+---
+title: "Rent Affordability"
+output: 
+  flexdashboard::flex_dashboard:
+    orientation: rows
+    vertical_layout: fill
+    navbar:
+    - { icon: "fa-linkedin", href: "https://www.linkedin.com/in/durand-sinclair/",align: right}
+    - { icon: "fa-facebook", href: "https://www.facebook.com/durand.sinclair",align: right}
+    source_code: embed
+    #logo: ./data/CIC_Logo.png #Needs to be exactly the right size to fit in bar
+    #theme: lumen
+runtime: shiny
+---
+
+```{r global, include=FALSE}
+# 0) PREPARE ENVIRONMENT -----------------------------
+    #Load libraries
+    library(flexdashboard)
+    library(spdplyr)
+    library(dplyr)
+    library(readr)
+    library(stringr)
+    library(highcharter)
+    library(leaflet)
+    library(DT)
+    library(here)
+    library(geojsonio)
+    library(geojsonlint)
+
+#1) GET DATA ---------------------------
+    
+    sa2_summary <- read_csv(here("data", "consolidated", "sa2_summary.csv"))
+```
+
+

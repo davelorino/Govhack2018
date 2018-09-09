@@ -1,0 +1,252 @@
+---
+title: "Rent Affordability"
+output: 
+  flexdashboard::flex_dashboard:
+    orientation: rows
+    vertical_layout: fill
+    navbar:
+    - { icon: "fa-linkedin", href: "https://www.linkedin.com/in/durand-sinclair/",align: right}
+    - { icon: "fa-facebook", href: "https://www.facebook.com/durand.sinclair",align: right}
+    source_code: embed
+    #logo: ./data/CIC_Logo.png #Needs to be exactly the right size to fit in bar
+    #theme: lumen
+runtime: shiny
+---
+
+```{r global, include=FALSE}
+# 0) PREPARE ENVIRONMENT -----------------------------
+    setwd("/Users/durandsinclair/Documents/Training/Hackathons/GovHack 2018 3")
+
+    #Load libraries
+    library(flexdashboard)
+    library(spdplyr)
+    library(dplyr)
+    library(readr)
+    library(stringr)
+    library(highcharter)
+    library(leaflet)
+    library(DT)
+    library(here)
+    library(geojsonio)
+    library(geojsonlint)
+
+#1) GET DATA ---------------------------
+    jobs <- read_csv(here("data", "income_by_job.csv"))
+    cities <- read_csv(here("data", "city_coordinates.csv"))
+    oz_merged <- readRDS(here("data", "consolidated", "oz_merged.rds"))
+    
+    #job_sectors <- jobs %>% select(training) %>% distinct()
+    occupation <- jobs %>% select(occupation) %>% distinct()
+    
+#2) SET UP LEAFLET ----------------------------------------------
+    leaflet(options = leafletOptions(minZoom = 0, maxZoom = 18))
+```
+
+
+Income
+=======================================================================
+
+Row {row-height= 50}
+-----------------------------------------------------------------------
+
+### Your income p.a.
+
+```{r}
+renderValueBox({
+    #Income box
+    valueBox(
+        prettyNum( paste( "$", round(input$income/1000, 0), " k"), big.mark = ","),
+        icon = "fa-user"
+        )
+})
+```
+
+### Maximum Rent p.a.
+```{r}
+renderValueBox({
+    #Maximum rent box
+    valueBox(
+        prettyNum( paste("$", round(input$income * 0.3 / 1000, 0), "k"), big.mark = ",")
+        , icon = "fa-home"
+        ) 
+})
+```
+
+### Maximum Rent per week
+```{r}
+renderValueBox({
+    #Maximum rent box
+    valueBox(
+        prettyNum( paste("$", round(input$income * 0.3 / 52, 0)), big.mark = ",")
+        , icon = "fa-calendar"
+        ) 
+})
+```
+
+
+Row 
+-----------------------------------------------------------------------
+### Options {data-width=250}
+```{r}
+
+#List the cities, and allow the user to choose them from a drop down (selectInput)
+    all_cities <- cities$gcc_names 
+
+    #all_jobs <- job_summary 
+        
+    #All jobs
+    #selectInput("job",
+    #            label = "Pick a job: ", 
+    #            choices = all_jobs,
+    #            selected = "",
+    #            selectize = FALSE
+    #            )
+
+    selectInput("city",
+                label = "Choose a city: ",
+                choices = all_cities,
+                selected = "Greater Sydney",
+                selectize = FALSE
+                )
+    selectInput(inputId = "job",
+                label = "Choose a job:",
+                choices = occupation,
+                selectize = FALSE
+                )
+    lumpreact = observe({
+        if (length(input$job) > 0 ) {
+            updated_income <- jobs %>% 
+                filter(occupation == input$job)
+        }
+    })
+
+   numericInput(inputId = "income"
+                 , label = "Household income"
+                 , value = updated_income$income
+                 #, value = 100000
+                 #, value = jobs %>% filter(occupation == isolate(input$job)) %>% select(average_income)
+                 , min = 0
+                 , max = 1000000
+                 )
+    #final_income = observe({
+    #    input$income
+    #})
+    #observe(input$job, {
+    #    xxx <- input$job
+    #    updateNumericInput(session = this, "income", value = jobs %>% filter(occupation == input$job) %>% select(average_income) )
+    #})
+
+```
+
+
+### Income Map
+Breakdown of SA4s and their status based on the number of school aged children compared to the number of student places in local schools.
+```{r}
+renderLeaflet({
+    
+    #Categorise SA2s by rent stress
+        this_city <- oz_merged %>%
+            filter(GCC_NAME16 == input$city)
+
+        good <- this_city %>%
+            filter(rent <= input$income * 0.25)
+        
+        small_problem <- this_city %>%
+            filter(rent > input$income * 0.25) %>%
+            filter(rent <= input$income * 0.30)
+        
+        big_problem <- this_city %>%
+            filter(rent > input$income * 0.3) %>%
+            filter(rent <= input$income * 0.35)
+        
+        no_way <- this_city %>%
+            filter(rent > input$income * 0.35)
+    
+        
+    #Define areas using geojson
+        #the_city <- geojson_json(this_city)
+        good <- geojson_json(good)
+        small_problem <- geojson_json(small_problem)
+        big_problem <- geojson_json(big_problem)
+        no_way <- geojson_json(no_way)
+        
+    #Produce map
+        leaflet() %>% 
+            addTiles() %>%
+            addGeoJSON(geojson = good,
+                       fillColor = "white",
+                       weight = 1,
+                       fill = TRUE,
+                       fillOpacity = 0.2,
+                       color = "purple"
+                       ) %>%
+            addGeoJSON(geojson = small_problem, 
+                       fillColor = "orange", 
+                       weight = 1, 
+                       fillOpacity = 0.2, 
+                       fill = TRUE, 
+                       color = "purple"
+            ) %>%
+            addGeoJSON(geojson = big_problem, 
+                       fillColor = "red", 
+                       weight = 1, 
+                       fillOpacity = 0.4, 
+                       fill = TRUE, 
+                       color = "purple"
+            ) %>%
+            addGeoJSON(geojson = no_way, 
+                       fillColor = "black", 
+                       weight = 1, 
+                       fillOpacity = 0.7, 
+                       fill = TRUE, 
+                       color = "green"
+            ) %>%
+            addLegend("bottomright", 
+                      color = c("orange", "red", "black"), 
+                      labels = c("mild stress", "big stress", "no way"), 
+                      title = "legend", 
+                      opacity = 0.5
+                      ) %>%
+            setView(
+                lat = cities %>% filter(gcc_names == input$city) %>% select(lat)
+                , lng = cities %>% filter(gcc_names == input$city) %>% select(lon)
+                , zoom = 8)
+
+
+})
+```
+
+
+Model {.Storyboard}
+================================================================================
+
+### There was a high degree of correlation between ...
+
+```{r}
+```
+
+### Fitted a model to predict how many hospitals should be in a county
+```{r}
+
+```
+
+***
+The results of the model were
+
+- Residual standard error: [Number] on [df] degrees of freedom
+
+- Multiple R Squared:  number
+
+- Adjusted ***R-squared:  ***
+
+- F-statistic:  274.1 on 3 and 572 DF
+
+- ***p-value: < 2.2e-16***
+
+And the formula was: 
+
+- lm(formula = student_count ~ AREASQKM16 + children + school_count, 
+    data = nsw_data)
+
+
+
